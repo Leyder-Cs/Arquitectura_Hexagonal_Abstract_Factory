@@ -1,0 +1,79 @@
+services:
+  # ===================================================================
+  # 1. Base de datos NoSQL: MongoDB (Persistencia duradera)
+  # ===================================================================
+  mongodb:
+    image: mongo:6.0
+    container_name: acortador_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: acortadordb
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - acortador_net
+
+  # ===================================================================
+  # 2. Almacenamiento en Memoria: Redis (Caché y TTL en tiempo real)
+  # ===================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: acortador_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - acortador_net
+
+  # ===================================================================
+  # 3. Capa Backend: Java 17 + Spring Boot 3 (Arquitectura Hexagonal)
+  # ===================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: acortador_backend
+    restart: always
+    ports:
+      - "8081:8080"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/acortadordb
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - APP_BASE_URL=http://localhost:8081
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - acortador_net
+
+  # ===================================================================
+  # 4. Capa Frontend: React + Vite + Nginx
+  # ===================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: acortador_frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - acortador_net
+
+volumes:
+  mongo_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  acortador_net:
+    driver: bridge
